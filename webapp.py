@@ -2,7 +2,7 @@
 
 import os 
 import google.generativeai as genai
-from langchain.vectorstores import FAISS # This is a Vector Database.
+from langchain_community.vectorstores import FAISS # This is a Vector Database.
 from langchain_community.embeddings import HuggingFaceEmbeddings  # This is used to convert text to vectors.
 from langchain.text_splitter import RecursiveCharacterTextSplitter # This is used to split the text into
 from pypdf import PdfReader # This is used to read the PDF files.
