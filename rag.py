@@ -1,13 +1,21 @@
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
+# =============================
+# RAG BASED CHATBOT (Streamlit)
+# Compatible with LangChain v0.3+ and Gemini 2.5
+# =============================
+
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 import os
 import google.generativeai as genai
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 import streamlit as st
 from pdfextractor import text_extractor_pdf
 import time
 
-# Sidebar - Upload PDF & Dark Mode toggle
+# =============================
+# Sidebar - Upload & Settings
+# =============================
 st.sidebar.title("📂 Upload your PDF file")
 file_uploaded = st.sidebar.file_uploader("Choose a PDF file", type=["pdf"])
 dark_mode = st.sidebar.checkbox("🌙 Dark Mode", value=False)
@@ -16,13 +24,15 @@ st.title("💬 :green[RAG BASED CHATBOT]")
 st.caption("Fully interactive SaaS-style chatbot with dynamic animations 🤖")
 
 tips = """
-✅ Steps to use:
+✅ **Steps to use:**
 1. Upload a PDF file using the sidebar.  
 2. Start chatting below with your queries.  
 """
 st.info(tips)
 
-# Initialize session state for chat history
+# =============================
+# Initialize Session State
+# =============================
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
@@ -30,7 +40,9 @@ if st.sidebar.button("🔄 Reset Chat"):
     st.session_state.chat_history = []
     st.success("Chat history cleared!")
 
-# Color themes
+# =============================
+# UI Theme Colors
+# =============================
 if dark_mode:
     bg_color = "#1E1E1E"
     user_bubble = "#0A84FF"
@@ -44,7 +56,9 @@ else:
     text_user = "white"
     text_assistant = "black"
 
-# Advanced CSS for SaaS-style chat UI
+# =============================
+# Custom CSS Animations & Styles
+# =============================
 st.markdown(f"""
 <style>
 body {{
@@ -79,18 +93,14 @@ body {{
     80% {{ transform: translateY(-5px) scale(1.05); }}
     100% {{ opacity: 1; transform: translateY(0) scale(1); }}
 }}
-.user-container {{
-    flex-direction: row-reverse;
-}}
+.user-container {{ flex-direction: row-reverse; }}
 .avatar {{
     font-size: 28px;
     margin: 0 10px;
     cursor: grab;
     transition: transform 0.3s;
 }}
-.avatar:hover {{
-    transform: scale(1.2) rotate(-5deg);
-}}
+.avatar:hover {{ transform: scale(1.2) rotate(-5deg); }}
 .bubble {{
     padding: 14px 20px;
     border-radius: 20px;
@@ -104,14 +114,8 @@ body {{
     transform: scale(1.03) translateY(-2px);
     box-shadow: 0 8px 20px rgba(0,0,0,0.3);
 }}
-.user-bubble {{
-    background-color: {user_bubble};
-    color: {text_user};
-}}
-.assistant-bubble {{
-    background-color: {assistant_bubble};
-    color: {text_assistant};
-}}
+.user-bubble {{ background-color: {user_bubble}; color: {text_user}; }}
+.assistant-bubble {{ background-color: {assistant_bubble}; color: {text_assistant}; }}
 .typing-dots span {{
     display: inline-block;
     width: 6px;
@@ -168,14 +172,20 @@ body {{
 </style>
 """, unsafe_allow_html=True)
 
+# =============================
 # PDF Processing & Chat Logic
+# =============================
 if file_uploaded:
+    # Extract text from uploaded PDF
     file_text = text_extractor_pdf(file_uploaded)
+
     if file_text.strip():
+        # Configure Gemini API
         key = os.getenv('GOOGLE_API_KEY')
         genai.configure(api_key=key)
         llm_model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
+        # Create embeddings and chunks
         embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
         chunks = splitter.split_text(file_text)
@@ -184,36 +194,45 @@ if file_uploaded:
             vector_store = FAISS.from_texts(chunks, embedding_model)
             retriever = vector_store.as_retriever(search_kwargs={"k": 3})
 
+            # Chat input
             user_input = st.chat_input("Type your question here...")
 
             if user_input:
                 st.session_state.chat_history.append({"role": "user", "content": user_input})
 
+                # Retrieve relevant PDF chunks
                 retrieved_docs = retriever.get_relevant_documents(user_input)
-                context = " ".join([f"<span class='pdf-highlight'>{doc.page_content}</span>" for doc in retrieved_docs])
+                context = " ".join(
+                    [f"<span class='pdf-highlight'>{doc.page_content}</span>" for doc in retrieved_docs]
+                )
 
+                # Build the LLM prompt
                 prompt = f"""
                 You are a helpful assistant.
                 Context: {context}
                 User question: {user_input}
                 """
 
-                # Typing placeholder with dots animation
+                # Typing animation placeholder
                 placeholder = st.empty()
                 placeholder.markdown(
                     f"""
                     <div class="chat-container">
                         <div class="avatar">🤖</div>
-                        <div class="bubble assistant-bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div>
+                        <div class="bubble assistant-bubble">
+                            <div class="typing-dots"><span></span><span></span><span></span></div>
+                        </div>
                     </div>
-                    """, unsafe_allow_html=True
+                    """,
+                    unsafe_allow_html=True,
                 )
 
-                # Generate assistant response
+                # Generate response using Gemini
                 with st.spinner("🤔 Assistant is thinking..."):
                     response = llm_model.generate_content(prompt).text
                     time.sleep(1)
 
+                # Animated typing effect
                 typed_text = ""
                 for char in response:
                     typed_text += char
@@ -223,13 +242,14 @@ if file_uploaded:
                             <div class="avatar">🤖</div>
                             <div class="bubble assistant-bubble">{typed_text}</div>
                         </div>
-                        """, unsafe_allow_html=True
+                        """,
+                        unsafe_allow_html=True,
                     )
                     time.sleep(0.01)
 
                 st.session_state.chat_history.append({"role": "assistant", "content": response})
 
-            # Display full chat history
+            # Display chat history
             st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
             for chat in st.session_state.chat_history:
                 if chat["role"] == "user":
@@ -239,7 +259,8 @@ if file_uploaded:
                             <div class="avatar">👤</div>
                             <div class="bubble user-bubble">{chat['content']}</div>
                         </div>
-                        """, unsafe_allow_html=True
+                        """,
+                        unsafe_allow_html=True,
                     )
                 else:
                     st.markdown(
@@ -248,24 +269,30 @@ if file_uploaded:
                             <div class="avatar">🤖</div>
                             <div class="bubble assistant-bubble">{chat['content']}</div>
                         </div>
-                        """, unsafe_allow_html=True
+                        """,
+                        unsafe_allow_html=True,
                     )
 
-            # Back to top button
+            # Back-to-top button
             st.markdown(
                 """
                 <div id='back-to-top'>
                     <span class='back-btn' onclick="document.querySelector('.chat-box').scrollTop = 0;">⬆️ Back to Top</span>
                 </div>
-                """, unsafe_allow_html=True)
+                """,
+                unsafe_allow_html=True,
+            )
             st.markdown("</div>", unsafe_allow_html=True)
 
             # Smooth auto-scroll
-            st.markdown("""
-            <script>
-            var chatBox = window.parent.document.querySelector('.chat-box');
-            if (chatBox) {
-                chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
-            }
-            </script>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                """
+                <script>
+                var chatBox = window.parent.document.querySelector('.chat-box');
+                if (chatBox) {
+                    chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+                }
+                </script>
+                """,
+                unsafe_allow_html=True,
+            )
