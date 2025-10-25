@@ -5,3 +5,4 @@ langchain-community
 langchain
 google-generativeai
 streamlit
+langchain-text-splitters
